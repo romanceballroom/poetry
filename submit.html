@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>寫一句，丟出去</title>
+<style>
+  :root{
+    --ink:#0B0E1A;
+    --paper:#F4EDE0;
+    --amber:#FFB84D;
+    --cyan:#5EEAD4;
+    --magenta:#FF6FA5;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(255,184,77,0.08), transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(94,234,212,0.08), transparent 40%),
+      var(--ink);
+    color:var(--paper);
+    font-family:"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .card{
+    width:100%;
+    max-width:420px;
+    background:rgba(244,237,224,0.03);
+    border:1px solid rgba(255,184,77,0.35);
+    border-radius:18px;
+    padding:28px 24px 24px;
+    position:relative;
+  }
+  .tag{
+    display:inline-block;
+    font-size:12px;
+    letter-spacing:2px;
+    color:var(--amber);
+    border:1px solid var(--amber);
+    border-radius:999px;
+    padding:3px 10px;
+    margin-bottom:14px;
+  }
+  h1{
+    margin:0 0 6px;
+    font-size:26px;
+    line-height:1.4;
+  }
+  p.sub{
+    margin:0 0 22px;
+    color:rgba(244,237,224,0.6);
+    font-size:14px;
+  }
+  label{
+    display:block;
+    font-size:13px;
+    color:var(--cyan);
+    margin-bottom:6px;
+  }
+  textarea, input[type=text]{
+    width:100%;
+    background:rgba(0,0,0,0.25);
+    border:1px solid rgba(244,237,224,0.2);
+    border-radius:10px;
+    color:var(--paper);
+    padding:12px 14px;
+    font-size:16px;
+    font-family:inherit;
+    margin-bottom:18px;
+    outline:none;
+  }
+  textarea{min-height:120px;resize:vertical;}
+  textarea:focus, input:focus{border-color:var(--amber);}
+  .count{
+    text-align:right;
+    font-size:12px;
+    color:rgba(244,237,224,0.4);
+    margin-top:-14px;
+    margin-bottom:16px;
+  }
+  button{
+    width:100%;
+    background:var(--amber);
+    color:var(--ink);
+    border:none;
+    border-radius:10px;
+    padding:14px;
+    font-size:17px;
+    font-weight:700;
+    letter-spacing:1px;
+    cursor:pointer;
+  }
+  button:active{transform:scale(0.98);}
+  button:disabled{opacity:0.5;}
+  .status{
+    margin-top:14px;
+    text-align:center;
+    font-size:14px;
+    min-height:20px;
+  }
+  .status.ok{color:var(--cyan);}
+  .status.err{color:var(--magenta);}
+</style>
+</head>
+<body>
+  <div class="card">
+    <span class="tag">現場投稿</span>
+    <h1>寫一句，丟出去</h1>
+    <p class="sub">等一下會被念出來、投在牆上。可以留名，也可以不留。</p>
+
+    <form id="f">
+      <label for="poem">你的句子</label>
+      <textarea id="poem" maxlength="120" placeholder="寫下這一刻想到的東西……" required></textarea>
+      <div class="count"><span id="cnt">0</span>/120</div>
+
+      <label for="author">署名（不填就是佚名）</label>
+      <input type="text" id="author" maxlength="20" placeholder="佚名">
+
+      <button type="submit" id="btn">送出</button>
+      <div class="status" id="status"></div>
+    </form>
+  </div>
+
+<script>
+  // TODO: 部署 Apps Script 後，把網址貼在這裡
+  var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywrbT-ehHvpV60g1RmNGb6DaXWZDCTkuY8ZL0jdZz_2Piz4eJUzQSHOmOLTDyTZ6K_/exec";
+
+  var poemEl = document.getElementById('poem');
+  var cntEl = document.getElementById('cnt');
+  poemEl.addEventListener('input', function(){
+    cntEl.textContent = poemEl.value.length;
+  });
+
+  document.getElementById('f').addEventListener('submit', function(e){
+    e.preventDefault();
+    var btn = document.getElementById('btn');
+    var status = document.getElementById('status');
+    var poem = poemEl.value.trim();
+    var author = document.getElementById('author').value.trim();
+
+    if (!poem) return;
+
+    btn.disabled = true;
+    btn.textContent = '送出中…';
+    status.textContent = '';
+    status.className = 'status';
+
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ poem: poem, author: author })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.ok) {
+        status.textContent = '收到了 ✦ 等一下留意牆上';
+        status.className = 'status ok';
+        document.getElementById('f').reset();
+        cntEl.textContent = '0';
+      } else {
+        throw new Error(data.error || 'unknown');
+      }
+    })
+    .catch(function(err){
+      status.textContent = '送出失敗，再試一次';
+      status.className = 'status err';
+    })
+    .finally(function(){
+      btn.disabled = false;
+      btn.textContent = '送出';
+    });
+  });
+</script>
+</body>
+</html>
