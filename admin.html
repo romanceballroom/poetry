@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>投稿管理</title>
+<style>
+  :root{
+    --ink:#0B0E1A;
+    --paper:#F4EDE0;
+    --amber:#FFB84D;
+    --cyan:#5EEAD4;
+    --magenta:#FF6FA5;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    padding:20px;
+  }
+  h1{
+    font-size:20px;
+    margin:0 0 4px;
+  }
+  .sub{
+    font-size:13px;
+    color:rgba(244,237,224,0.5);
+    margin:0 0 20px;
+  }
+  .stats{
+    display:flex;
+    gap:16px;
+    margin-bottom:16px;
+    font-size:13px;
+    color:rgba(244,237,224,0.6);
+  }
+  .stats b{ color:var(--cyan); font-weight:700; }
+  .toolbar{
+    display:flex;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .toolbar button{
+    background:rgba(244,237,224,0.06);
+    border:1px solid rgba(244,237,224,0.2);
+    color:var(--paper);
+    border-radius:8px;
+    padding:8px 14px;
+    font-size:13px;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .toolbar button.active{
+    border-color:var(--amber);
+    color:var(--amber);
+  }
+  .list{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .row{
+    background:rgba(244,237,224,0.04);
+    border:1px solid rgba(244,237,224,0.12);
+    border-radius:12px;
+    padding:14px 16px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .row.hidden{
+    opacity:0.45;
+    border-color:var(--magenta);
+  }
+  .row .content{ flex:1; min-width:0; }
+  .row .poem{
+    font-size:15px;
+    line-height:1.5;
+    word-break:break-word;
+    margin:0 0 4px;
+  }
+  .row .meta{
+    font-size:12px;
+    color:var(--amber);
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .row.hidden .meta{ color:var(--magenta); }
+  .row .time{ color:rgba(244,237,224,0.4); }
+  .row button{
+    flex-shrink:0;
+    background:transparent;
+    border:1px solid var(--magenta);
+    color:var(--magenta);
+    border-radius:8px;
+    padding:8px 16px;
+    font-size:13px;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .row.hidden button{
+    border-color:var(--cyan);
+    color:var(--cyan);
+  }
+  .empty{
+    text-align:center;
+    padding:60px 0;
+    color:rgba(244,237,224,0.3);
+    font-size:14px;
+  }
+</style>
+</head>
+<body>
+  <h1>投稿管理</h1>
+  <p class="sub">下架的句子不會出現在投影牆上，也不會被隨機重播抽到</p>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="toolbar">
+    <button class="active" data-filter="all">全部</button>
+    <button data-filter="visible">上架中</button>
+    <button data-filter="hidden">已下架</button>
+  </div>
+
+  <div class="list" id="list"></div>
+
+<script>
+  // 跟 display.html / submit.html 用同一組網址
+  var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywrbT-ehHvpV60g1RmNGb6DaXWZDCTkuY8ZL0jdZz_2Piz4eJUzQSHOmOLTDyTZ6K_/exec";
+  var POLL_MS = 5000;
+
+  var listEl = document.getElementById('list');
+  var statsEl = document.getElementById('stats');
+  var toolbarEl = document.querySelector('.toolbar');
+  var currentFilter = 'all';
+  var currentData = [];
+
+  function escapeHtml_(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function formatTime_(t){
+    var d = new Date(t);
+    var pad = function(n){ return n < 10 ? '0' + n : n; };
+    return (d.getMonth()+1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function render(){
+    var data = currentData.slice().sort(function(a,b){ return b.time - a.time; });
+    var visibleCount = data.filter(function(i){ return i.status !== 'hidden'; }).length;
+    var hiddenCount = data.length - visibleCount;
+
+    statsEl.innerHTML = '共 <b>' + data.length + '</b> 則　上架中 <b>' + visibleCount + '</b>　已下架 <b>' + hiddenCount + '</b>';
+
+    if (currentFilter === 'visible') data = data.filter(function(i){ return i.status !== 'hidden'; });
+    if (currentFilter === 'hidden') data = data.filter(function(i){ return i.status === 'hidden'; });
+
+    if (data.length === 0) {
+      listEl.innerHTML = '<div class="empty">目前沒有符合的投稿</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    data.forEach(function(item){
+      var isHidden = item.status === 'hidden';
+      var row = document.createElement('div');
+      row.className = 'row' + (isHidden ? ' hidden' : '');
+
+      var content = document.createElement('div');
+      content.className = 'content';
+      content.innerHTML =
+        '<p class="poem">' + escapeHtml_(item.poem) + '</p>' +
+        '<div class="meta">' +
+          '<span>' + escapeHtml_(item.author) + '</span>' +
+          '<span class="time">' + formatTime_(item.time) + '</span>' +
+          '<span>' + (isHidden ? '已下架' : '上架中') + '</span>' +
+        '</div>';
+
+      var btn = document.createElement('button');
+      btn.textContent = isHidden ? '恢復上架' : '下架';
+      btn.onclick = function(){
+        btn.disabled = true;
+        btn.textContent = '處理中…';
+        var action = isHidden ? 'unhide' : 'hide';
+        fetch(APPS_SCRIPT_URL + '?action=' + action + '&id=' + encodeURIComponent(item.id))
+          .then(function(){ return poll(); })
+          .catch(function(){
+            btn.disabled = false;
+            btn.textContent = isHidden ? '恢復上架' : '下架';
+          });
+      };
+
+      row.appendChild(content);
+      row.appendChild(btn);
+      listEl.appendChild(row);
+    });
+  }
+
+  toolbarEl.addEventListener('click', function(e){
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    currentFilter = btn.dataset.filter;
+    Array.prototype.forEach.call(toolbarEl.querySelectorAll('button'), function(b){
+      b.classList.toggle('active', b === btn);
+    });
+    render();
+  });
+
+  function poll(){
+    return fetch(APPS_SCRIPT_URL + '?all=1&t=' + Date.now())
+      .then(function(r){ return r.json(); })
+      .then(function(list){
+        currentData = list;
+        render();
+      })
+      .catch(function(err){ console.error('poll error', err); });
+  }
+
+  poll();
+  setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>
